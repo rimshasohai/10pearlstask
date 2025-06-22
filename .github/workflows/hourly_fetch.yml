@@ -25,3 +25,14 @@ jobs:
         run: python 10pearlstask.ipynb
 
         
+      - name: Commit and push CSV
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add karachi_realtime_aqi.csv
+          git commit -m "Update CSV with new AQI row" || echo "No changes"
+          git push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+        
