@@ -7,9 +7,8 @@ from datetime import datetime
 OPENWEATHER_API_KEY = "ee88310481e99a7843bdedc0cca27fd1"
 AQICN_API_TOKEN = "2eb7e59a27fec6826892da8d9b3f9ff95e6c573e"
 
-
+# ✅ Step 2: Karachi Location
 LAT, LON = 24.8607, 67.0011
-CSV_FILE = "data/karachi_aqi_data.csv"
 
 def fetch_openweather():
     url = f"http://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={OPENWEATHER_API_KEY}&units=metric"
@@ -38,8 +37,8 @@ def fetch_aqicn():
 def get_data_row():
     now = datetime.utcnow()
     time_features = {
-        "datetime": now,
-        "hour": now.hour,
+        "datetime_utc": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "date": now.date(),
         "day": now.day,
         "month": now.month,
         "weekday": now.weekday()
@@ -47,19 +46,18 @@ def get_data_row():
     return {**time_features, **fetch_openweather(), **fetch_aqicn()}
 
 def main():
-    os.makedirs("data", exist_ok=True)
+    # ✅ Prepare daily folder path
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    folder_path = f"data/{today_str}"
+    os.makedirs(folder_path, exist_ok=True)
+    csv_file_path = os.path.join(folder_path, "karachi.csv")
+
+    # ✅ Fetch data and save to daily CSV
     row = get_data_row()
-    df_new = pd.DataFrame([row])
+    df = pd.DataFrame([row])
+    df.to_csv(csv_file_path, index=False)
 
-    # ✅ Append to old file if exists
-    if os.path.exists(CSV_FILE):
-        df_old = pd.read_csv(CSV_FILE)
-        df = pd.concat([df_old, df_new], ignore_index=True)
-    else:
-        df = df_new
-
-    df.to_csv(CSV_FILE, index=False)
-    print("✅ Appended new row to CSV")
+    print(f"✅ Saved daily data to: {csv_file_path}")
 
 if __name__ == "__main__":
     main()
