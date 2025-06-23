@@ -2,38 +2,87 @@ name: Daily AQI Collection
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # runs daily at 00:00 UTC
+    - cron: '0 0 * * *'  # Every day at 00:00 UTC
   workflow_dispatch:
 
 jobs:
-  collect:
+  fetch-and-save:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: pip install pandas requests
 
-    - name: Run AQI fetch script
-      env:
-        OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
-        AQICN_API_TOKEN: ${{ secrets.AQICN_API_TOKEN }}
-      run: python aqi_data_collection.py
+      - name: Fetch AQI and Weather Data (with API keys in script)
+        run: |
+          import os
+          import pandas as pd
+          import requests
+          from datetime import datetime
 
-    - name: Commit updated CSV
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        git config --global user.email "actions@github.com"
-        git config --global user.name "GitHub Actions"
-        git add data/*
-        git commit -m "📥 Daily AQI update" || echo "No changes"
-        git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
+          # ✅ Karachi coordinates
+          LAT, LON = 24.8607, 67.0011
+
+          # ✅ Embedded API keys (⚠️ only for private/testing use)
+          OPENWEATHER_API_KEY = "ee88310481e99a7843bdedc0cca27fd1"
+          AQICN_API_TOKEN = "2eb7e59a27fec6826892da8d9b3f9ff95e6c573e"
+
+          def fetch_openweather():
+              url = f"http://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={OPENWEATHER_API_KEY}&units=metric"
+              r = requests.get(url).json()
+              return {
+                  "temp": r["main"]["temp"],
+                  "humidity": r["main"]["humidity"],
+                  "pressure": r["main"]["pressure"],
+                  "wind_speed": r["wind"]["speed"]
+              }
+
+          def fetch_aqicn():
+              url = f"https://api.waqi.info/feed/geo:{LAT};{LON}/?token={AQICN_API_TOKEN}"
+              r = requests.get(url).json()
+              iaqi = r["data"]["iaqi"]
+              return {
+                  "aqi": r["data"]["aqi"],
+                  "pm25": iaqi.get("pm25", {}).get("v"),
+                  "pm10": iaqi.get("pm10", {}).get("v"),
+                  "co": iaqi.get("co", {}).get("v"),
+                  "no2": iaqi.get("no2", {}).get("v"),
+                  "so2": iaqi.get("so2", {}).get("v"),
+                  "o3": iaqi.get("o3", {}).get("v")
+              }
+
+          now = datetime.utcnow()
+          time_features = {
+              "datetime_utc": now.strftime("%Y-%m-%d %H:%M:%S"),
+              "date": str(now.date()),
+              "day": now.day,
+              "month": now.month,
+              "weekday": now.weekday()
+          }
+
+          row = {**time_features, **fetch_openweather(), **fetch_aqicn()}
+          df = pd.DataFrame([row])
+
+          folder = f"data/{now.strftime('%Y-%m-%d')}"
+          os.makedirs(folder, exist_ok=True)
+          csv_path = f"{folder}/karachi.csv"
+          df.to_csv(csv_path, index=False)
+
+      - name: Commit and Push CSV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add data/*
+          git commit -m "📥 Daily AQI data logged" || echo "No changes to commit"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
 
