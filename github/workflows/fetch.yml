@@ -1,9 +1,9 @@
-name: Hourly AQI Collection
+name: Daily AQI Collection
 
 on:
   schedule:
-    - cron: '0 * * * *'  # every hour
-  workflow_dispatch:     # manual trigger
+    - cron: '0 0 * * *'  # runs daily at 00:00 UTC
+  workflow_dispatch:
 
 jobs:
   collect:
@@ -33,7 +33,7 @@ jobs:
       run: |
         git config --global user.email "actions@github.com"
         git config --global user.name "GitHub Actions"
-        git add data/karachi_aqi_data.csv
-        git commit -m "📥 Hourly AQI update" || echo "No changes"
+        git add data/*
+        git commit -m "📥 Daily AQI update" || echo "No changes"
         git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
 
